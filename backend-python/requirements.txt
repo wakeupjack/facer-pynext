@@ -1,0 +1,5 @@
+Flask
+Flask-CORS
+face_recognition
+Pillow
+numpy
