@@ -1,15 +1,20 @@
-// pages/register.jsx
+// src/pages/index.jsx
 import { useState, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { 
-  Container, Typography, Button, TextField, Box, 
-  Paper, Card, CardContent, CardActions, Alert, Stack
+  Container, Typography, Button, Box, 
+  Paper, Card, CardContent, Alert, Stack,
+  CircularProgress
 } from '@mui/material';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import FlipCameraIosIcon from '@mui/icons-material/FlipCameraIos';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import HomeIcon from '@mui/icons-material/Home';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+
+// Import DateTime dengan opsi ssr: false
+const DateTime = dynamic(() => import('../components/DateTime'), { ssr: false });
 
 const videoConstraints = {
   width: 400,
@@ -17,13 +22,14 @@ const videoConstraints = {
   facingMode: 'user',
 };
 
-export default function RegisterPage() {
+export default function AttendancePage() {
   const webcamRef = useRef(null);
-  const [name, setName] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [imgSrc, setImgSrc] = useState(null);
+  const [recognizedName, setRecognizedName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
   const capture = useCallback(() => {
     const imageSrc = webcamRef.current.getScreenshot();
@@ -34,28 +40,29 @@ export default function RegisterPage() {
     setImgSrc(null);
     setMessage('');
     setError('');
+    setRecognizedName('');
   }
 
   const handleSubmit = async () => {
-    if (!imgSrc || !name) {
-      setError('Please capture an image and enter your name.');
+    if (!imgSrc) {
+      setError('Please capture an image first.');
       return;
     }
+    
     setError('');
     setMessage('Processing...');
     setIsProcessing(true);
 
-    // Convert base64 to Blob
-    const fetchRes = await fetch(imgSrc);
-    const blob = await fetchRes.blob();
-    const file = new File([blob], `${name.replace(' ', '_')}_registration.jpg`, { type: 'image/jpeg' });
-
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('image', file);
-
     try {
-      const response = await fetch('http://localhost:5001/api/register', { // Alamat backend Flask
+      // Convert base64 to Blob
+      const fetchRes = await fetch(imgSrc);
+      const blob = await fetchRes.blob();
+      const file = new File([blob], 'attendance.jpg', { type: 'image/jpeg' });
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch(`${apiUrl}/api/attend`, {
         method: 'POST',
         body: formData,
       });
@@ -63,11 +70,10 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage(data.message || 'Registration successful!');
-        setName(''); // Reset nama setelah berhasil
-        setImgSrc(null); // Reset gambar setelah berhasil
+        setMessage(data.message || 'Attendance processed');
+        setRecognizedName(data.name || 'Unknown');
       } else {
-        setError(data.error || 'Registration failed.');
+        setError(data.error || 'Attendance process failed.');
       }
     } catch (err) {
       console.error(err);
@@ -81,17 +87,18 @@ export default function RegisterPage() {
     <Container maxWidth="sm" sx={{ py: 4 }}>
       <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
         <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ fontWeight: 'bold' }}>
-          Register Face
+          Face Attendance
         </Typography>
         
-        <Box sx={{ mb: 3, textAlign: 'center' }}>
-          <Link href="/" passHref>
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+          <Link href="/admin/login" passHref>
             <Button 
               variant="outlined" 
-              startIcon={<HomeIcon />}
+              color="secondary"
+              startIcon={<AdminPanelSettingsIcon />}
               sx={{ borderRadius: 2 }}
             >
-              Go to Attendance
+              Admin Access
             </Button>
           </Link>
         </Box>
@@ -148,53 +155,46 @@ export default function RegisterPage() {
                     }}
                   />
                 </Box>
-                <Button 
-                  variant="outlined" 
-                  onClick={retake}
-                  fullWidth
-                  startIcon={<FlipCameraIosIcon />}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Retake Photo
-                </Button>
+                <Stack direction="row" spacing={2}>
+                  <Button 
+                    variant="outlined" 
+                    onClick={retake}
+                    fullWidth
+                    startIcon={<FlipCameraIosIcon />}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Retake Photo
+                  </Button>
+                  <Button 
+                    color="primary" 
+                    variant="contained" 
+                    onClick={handleSubmit}
+                    fullWidth
+                    disabled={isProcessing}
+                    startIcon={isProcessing ? null : <HowToRegIcon />}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {isProcessing ? (
+                      <CircularProgress size={24} color="inherit" sx={{ mr: 1 }}/>
+                    ) : 'Check Attendance'}
+                  </Button>
+                </Stack>
               </Stack>
             )}
           </CardContent>
         </Card>
         
-        {imgSrc && (
-          <Card sx={{ mb: 3, borderRadius: 2 }}>
-            <CardContent>
-              <TextField
-                label="Your Name"
-                variant="outlined"
-                placeholder="Enter your full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                fullWidth
-                margin="normal"
-                sx={{ mb: 1 }}
-              />
-            </CardContent>
-            <CardActions sx={{ p: 2, pt: 0 }}>
-              <Button 
-                color="primary" 
-                variant="contained" 
-                onClick={handleSubmit}
-                fullWidth
-                disabled={isProcessing}
-                startIcon={<PersonAddIcon />}
-                sx={{ borderRadius: 2 }}
-              >
-                {isProcessing ? 'Processing...' : 'Register'}
-              </Button>
-            </CardActions>
-          </Card>
-        )}
-        
         {message && message !== 'Processing...' && (
-          <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
+          <Alert 
+            severity={recognizedName !== 'Unknown' ? 'success' : 'info'} 
+            sx={{ mb: 2, borderRadius: 2 }}
+          >
             {message}
+            {recognizedName && recognizedName !== 'Unknown' && (
+              <Typography variant="body2" sx={{ mt: 1, fontWeight: 'bold' }}>
+                Recognized as: {recognizedName}
+              </Typography>
+            )}
           </Alert>
         )}
         
@@ -203,6 +203,8 @@ export default function RegisterPage() {
             {error}
           </Alert>
         )}
+
+        <DateTime />
       </Paper>
     </Container>
   );
