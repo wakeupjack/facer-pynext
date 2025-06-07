@@ -6,17 +6,20 @@ from flask_cors import CORS
 from PIL import Image
 import numpy as np
 import io
+import datetime
 
 app = Flask(__name__)
 CORS(app)  # Izinkan Cross-Origin Resource Sharing
 
 UPLOAD_FOLDER = 'uploads'
 KNOWN_FACES_FILE = 'known_faces.json'
+USERS_FILE = 'users.json'  # File baru untuk menyimpan data user
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# Function untuk memuat data known faces
 def load_known_faces():
     if os.path.exists(KNOWN_FACES_FILE) and os.path.getsize(KNOWN_FACES_FILE) > 0:
         with open(KNOWN_FACES_FILE, 'r') as f:
@@ -26,9 +29,41 @@ def load_known_faces():
                 return [] # File korup atau bukan JSON valid
     return []
 
+# Function untuk menyimpan data known faces
 def save_known_faces(data):
     with open(KNOWN_FACES_FILE, 'w') as f:
         json.dump(data, f, indent=4)
+
+# Function untuk memuat data users
+def load_users():
+    if os.path.exists(USERS_FILE) and os.path.getsize(USERS_FILE) > 0:
+        with open(USERS_FILE, 'r') as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return [] # File korup atau bukan JSON valid
+    return []
+
+# Function untuk menyimpan data users
+def save_users(data):
+    with open(USERS_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+# Function untuk mencari user berdasarkan name
+def find_user_by_name(users, name):
+    for user in users:
+        if user['name'] == name:
+            return user
+    return None
+
+# Function untuk memperbarui status faceRegistered user
+def update_user_face_registered(users, name, status=True):
+    for user in users:
+        if user['name'] == name:
+            user['hasFaceRegistered'] = status
+            user['lastActive'] = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            return True
+    return False
 
 @app.route('/api/register', methods=['POST'])
 def register_face():
@@ -45,11 +80,21 @@ def register_face():
     name = request.form['name']
     file_stream = request.files['image'].read()
 
-    # Cek apakah nama sudah terdaftar
+    # Muat data users
+    users = load_users()
+    
+    # Pastikan user ada di database
+    user = find_user_by_name(users, name)
+    if not user:
+        return jsonify({"error": f"User '{name}' not found. Please add user first."}), 404
+
+    # Cek apakah nama sudah terdaftar di known_faces
     known_faces_data = load_known_faces()
-    for face_data in known_faces_data:
+    for i, face_data in enumerate(known_faces_data):
         if face_data['name'] == name:
-            return jsonify({"error": f"Name '{name}' already registered."}), 400
+            # Jika update, hapus data lama
+            known_faces_data.pop(i)
+            break
 
     try:
         image = Image.open(io.BytesIO(file_stream))
@@ -69,6 +114,10 @@ def register_face():
         new_face_data = {"name": name, "encoding": face_encoding.tolist()}
         known_faces_data.append(new_face_data)
         save_known_faces(known_faces_data)
+        
+        # Update user status hasFaceRegistered menjadi True
+        update_user_face_registered(users, name)
+        save_users(users)
 
         return jsonify({"message": f"User {name} registered successfully"}), 201
 
@@ -112,8 +161,12 @@ def attend_face():
             best_match_index = np.argmin(face_distances)
             if matches[best_match_index]:
                 name = known_face_names[best_match_index]
-                # Di sini Anda bisa menambahkan logika untuk mencatat absensi ke database/file log
-                print(f"Attendance recorded for: {name} at {face_distances[best_match_index]}")
+                
+                # Update lastActive user
+                users = load_users()
+                update_user_face_registered(users, name)
+                save_users(users)
+                
                 return jsonify({"message": f"Welcome, {name}!", "name": name}), 200
             else:
                  print(f"No match, closest distance: {face_distances[best_match_index]}")
@@ -125,5 +178,125 @@ def attend_face():
         print(f"Error during attendance: {e}")
         return jsonify({"error": "Could not process image"}), 500
 
+# ============= USER MANAGEMENT API =============
+
+# Get all users (with face registration status)
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    # Load users data
+    users = load_users()
+    
+    # Jika tidak ada user, inisialisasi file user dengan admin user
+    if not users:
+        admin_user = {
+            "id": 1,
+            "name": "Admin",
+            "role": "Admin",
+            "hasFaceRegistered": True,
+            "lastActive": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        users = [admin_user]
+        save_users(users)
+    
+    return jsonify(users), 200
+
+# Add user (without face registration)
+@app.route('/api/users', methods=['POST'])
+def add_user():
+    # Check if request has JSON data
+    if not request.is_json:
+        return jsonify({"error": "Missing JSON data"}), 400
+    
+    data = request.get_json()
+    
+    # Validate name
+    if 'name' not in data or not data['name'] or len(data['name'].strip()) < 2:
+        return jsonify({"error": "Valid name is required (at least 2 characters)"}), 400
+    
+    name = data['name'].strip()
+    
+    # Load users data
+    users = load_users()
+    
+    # Check if name already exists
+    if any(user['name'] == name for user in users):
+        return jsonify({"error": f"User with name '{name}' already exists"}), 400
+    
+    # Generate a user ID
+    user_id = max([user['id'] for user in users], default=0) + 1
+    
+    # Create new user
+    new_user = {
+        "id": user_id,
+        "name": name,
+        "role": "User",
+        "hasFaceRegistered": False,
+        "lastActive": "Never"
+    }
+    
+    # Add user to list and save
+    users.append(new_user)
+    save_users(users)
+    
+    return jsonify({
+        "message": f"User {name} added successfully",
+        "user": new_user
+    }), 201
+
+# Delete a user and their face data
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    # Load users data
+    users = load_users()
+    
+    # Find the user
+    user_to_delete = None
+    for i, user in enumerate(users):
+        if user['id'] == user_id:
+            user_to_delete = user
+            del users[i]
+            break
+    
+    if not user_to_delete:
+        return jsonify({"error": f"User with ID {user_id} not found"}), 404
+    
+    # Save updated users list
+    save_users(users)
+    
+    # If user has face data, remove it as well
+    if user_to_delete.get('hasFaceRegistered', False):
+        known_faces = load_known_faces()
+        for i, face in enumerate(known_faces):
+            if face['name'] == user_to_delete['name']:
+                del known_faces[i]
+                save_known_faces(known_faces)
+                break
+    
+    return jsonify({
+        "message": f"User {user_to_delete['name']} deleted successfully"
+    }), 200
+
+# Get statistics about users and faces
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    # Load data
+    users = load_users()
+    known_faces = load_known_faces()
+    
+    # Calculate statistics
+    total_users = len(users)
+    faces_registered = len([u for u in users if u.get('hasFaceRegistered', False)])
+    
+    stats = {
+        "totalUsers": total_users,
+        "facesRegistered": faces_registered,
+        "registrationRate": round(faces_registered / total_users * 100) if total_users > 0 else 0,
+        "lastUpdated": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    return jsonify(stats), 200
+
+# ================= END OF USER MANAGEMENT API =================
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True) # Gunakan port selain 3000 (default Next.js)
+    app.run(host='0.0.0.0', port=5001, debug=True)

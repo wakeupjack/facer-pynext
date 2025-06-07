@@ -1,0 +1,16 @@
+[
+    {
+        "id": 1,
+        "name": "Admin",
+        "role": "Admin",
+        "hasFaceRegistered": true,
+        "lastActive": "2025-06-07 15:12:36"
+    },
+    {
+        "id": 2,
+        "name": "rakku",
+        "role": "User",
+        "hasFaceRegistered": false,
+        "lastActive": "Never"
+    }
+]
