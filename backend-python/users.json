@@ -8,9 +8,9 @@
     },
     {
         "id": 2,
-        "name": "rakku",
+        "name": "chamber",
         "role": "User",
-        "hasFaceRegistered": false,
-        "lastActive": "Never"
+        "hasFaceRegistered": true,
+        "lastActive": "2025-06-08 06:36:04"
     }
 ]
