@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, Container, Typography, Button, Paper, Grid, Card, CardContent, 
   Avatar, IconButton, Divider, Tabs, Tab, LinearProgress, 
@@ -26,6 +25,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/router';
 import RegisterFaceModal from '../../components/RegisterFaceModal';
 
 // Dynamically import the Chart component with SSR disabled
@@ -141,6 +141,25 @@ function TabPanel(props) {
         </Box>
       )}
     </div>
+  );
+}
+
+// Attendance Panel that redirects to attendance.jsx
+function AttendancePanel() {
+  const router = useRouter();
+  
+  useEffect(() => {
+    // Redirect to attendance.jsx page
+    router.push('/admin/attendance');
+  }, [router]);
+  
+  return (
+    <Box sx={{ p: 4, textAlign: 'center' }}>
+      <CircularProgress />
+      <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+        Loading attendance records...
+      </Typography>
+    </Box>
   );
 }
 
@@ -374,16 +393,18 @@ const usersData = [
   { id: 2, name: "Jane Smith", email: "jane@example.com", role: "User", hasFaceRegistered: true, lastActive: "2025-06-06 08:15:05" },
   { id: 3, name: "Robert Johnson", email: "robert@example.com", role: "User", hasFaceRegistered: false, lastActive: "2025-06-05 17:45:33" },
   { id: 4, name: "Emily Davis", email: "emily@example.com", role: "User", hasFaceRegistered: true, lastActive: "2025-06-06 10:20:18" },
-  { id: 5, name: "Admin User", email: "admin@example.com", role: "Admin", hasFaceRegistered: true, lastActive: "2025-06-06 15:26:13" }
+  { id: 5, name: "wakeupjack", email: "wakeupjack@example.com", role: "User", hasFaceRegistered: true, lastActive: "2025-06-08 07:32:26" },
+  { id: 6, name: "Admin User", email: "admin@example.com", role: "Admin", hasFaceRegistered: true, lastActive: "2025-06-06 15:26:13" }
 ];
 
 // Recent activities data
 const recentActivities = [
   { id: 1, user: "Jane Smith", action: "marked attendance", time: "08:15 AM", success: true, avatar: "JS" },
   { id: 2, user: "John Doe", action: "attempted to mark attendance", time: "09:30 AM", success: false, avatar: "JD" },
-  { id: 3, user: "Emily Davis", action: "marked attendance", time: "10:20 AM", success: true, avatar: "ED" },
-  { id: 4, user: "Robert Johnson", action: "was marked absent", time: "11:00 AM", success: false, avatar: "RJ" },
-  { id: 5, user: "Admin User", action: "added a new user", time: "12:45 PM", success: true, avatar: "AU" }
+  { id: 3, user: "wakeupjack", action: "marked attendance", time: "07:32 AM", success: true, avatar: "WJ" },
+  { id: 4, user: "Emily Davis", action: "marked attendance", time: "10:20 AM", success: true, avatar: "ED" },
+  { id: 5, user: "Robert Johnson", action: "was marked absent", time: "11:00 AM", success: false, avatar: "RJ" },
+  { id: 6, user: "Admin User", action: "added a new user", time: "12:45 PM", success: true, avatar: "AU" }
 ];
 
 // Admin Dashboard Component
@@ -400,6 +421,9 @@ export default function AdminDashboard() {
     day: 'numeric'
   }));
   
+  // State for current time
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
   // State for modals and dialogs
   const [addUserModalOpen, setAddUserModalOpen] = useState(false);
   const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
@@ -408,6 +432,15 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState(null);
   
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+
+  // Update time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
   // Modal handlers
   const handleOpenAddUserModal = () => {
@@ -506,6 +539,16 @@ export default function AdminDashboard() {
   const handleLogout = () => {
     localStorage.removeItem('adminUser');
     router.push('/admin/login');
+  };
+  
+  // Navigate to attendance page
+  const goToAttendancePage = () => {
+    router.push('/admin/attendance');
+  };
+  
+  // Navigate to reports page
+  const goToReportsPage = () => {
+    router.push('/admin/reports');
   };
   
   // Show loading until admin user is authenticated
@@ -652,7 +695,7 @@ export default function AdminDashboard() {
           <ListItem 
             button 
             selected={tabValue === 3}
-            onClick={() => setTabValue(3)}
+            onClick={() => goToAttendancePage()}
             sx={{ 
               borderRadius: 2,
               mb: 1,
@@ -676,7 +719,7 @@ export default function AdminDashboard() {
           <ListItem 
             button 
             selected={tabValue === 4}
-            onClick={() => setTabValue(4)}
+            onClick={() => goToReportsPage()}
             sx={{ 
               borderRadius: 2,
               '&.Mui-selected': {
@@ -698,6 +741,14 @@ export default function AdminDashboard() {
         </List>
         
         <Box sx={{ position: 'absolute', bottom: 0, width: '100%', p: 2 }}>
+          <Box sx={{ mb: 2, textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              Current time:
+            </Typography>
+            <Typography variant="body2" fontWeight="medium">
+              {currentTime.toLocaleTimeString()}
+            </Typography>
+          </Box>
           <Button
             variant="outlined"
             color="error"
@@ -853,23 +904,17 @@ export default function AdminDashboard() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box>
                     <Typography color="text.secondary" variant="body2" fontWeight="medium">
-                      Pending Registrations
+                      Current Time
                     </Typography>
                     <Typography variant="h4" component="div" fontWeight="bold" sx={{ my: 1 }}>
-                      {users.filter(u => !u.hasFaceRegistered && u.role !== 'Admin').length}
+                      {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Typography>
-                    <Button 
-                      variant="text" 
-                      size="small"
-                      color="primary"
-                      onClick={() => setTabValue(1)}
-                      sx={{ p: 0, minWidth: 'auto' }}
-                    >
-                      Register now
-                    </Button>
+                    <Typography variant="caption" color="text.secondary">
+                      {currentTime.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                    </Typography>
                   </Box>
-                  <Avatar sx={{ bgcolor: 'warning.light', width: 56, height: 56 }}>
-                    <PersonAddIcon sx={{ color: 'warning.main' }} fontSize="large" />
+                  <Avatar sx={{ bgcolor: 'info.light', width: 56, height: 56 }}>
+                    <AccessTimeIcon sx={{ color: 'info.main' }} fontSize="large" />
                   </Avatar>
                 </Box>
               </Paper>
@@ -1016,7 +1061,11 @@ export default function AdminDashboard() {
                 </List>
                 
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                  <Button variant="text" size="small">
+                  <Button 
+                    variant="text" 
+                    size="small"
+                    onClick={goToAttendancePage}
+                  >
                     View All Activities
                   </Button>
                 </Box>
@@ -1062,7 +1111,7 @@ export default function AdminDashboard() {
                       color="success" 
                       fullWidth 
                       startIcon={<AssignmentIndIcon />}
-                      onClick={() => setTabValue(3)}
+                      onClick={goToAttendancePage}
                       sx={{ borderRadius: 2, py: 1.5 }}
                     >
                       View Attendance
@@ -1075,7 +1124,7 @@ export default function AdminDashboard() {
                       color="info" 
                       fullWidth 
                       startIcon={<BarChartIcon />}
-                      onClick={() => setTabValue(4)}
+                      onClick={goToReportsPage}
                       sx={{ borderRadius: 2, py: 1.5 }}
                     >
                       Generate Report
@@ -1229,7 +1278,6 @@ export default function AdminDashboard() {
                       </Box>
                       
                       <Box sx={{ display: 'flex', mt: 3, gap: 1 }}>
-                        {/* Button Register Face dengan handler yang ditingkatkan */}
                         <Button
                           variant={user.hasFaceRegistered ? "outlined" : "contained"}
                           color={user.hasFaceRegistered ? "secondary" : "primary"}
@@ -1353,7 +1401,6 @@ export default function AdminDashboard() {
                           <td style={{ padding: '16px' }}>{user.lastActive || 'Never'}</td>
                           <td style={{ padding: '16px' }}>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                              {/* Button Register Face di table */}
                               <Button
                                 variant={user.hasFaceRegistered ? "outlined" : "contained"}
                                 color={user.hasFaceRegistered ? "secondary" : "primary"}
@@ -1385,42 +1432,19 @@ export default function AdminDashboard() {
           )}
         </TabPanel>
         
-        {/* Attendance Tab */}
+        {/* Attendance Tab - Now redirects to attendance.jsx */}
         <TabPanel value={tabValue} index={3}>
-          <Typography variant="h6">
-            Attendance Records
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-            View and manage daily attendance records.
-          </Typography>
-          
-          <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 4 }}>
-            <Typography variant="body1" color="text.secondary">
-              Attendance records will be displayed here.
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              This feature is coming soon.
-            </Typography>
-          </Paper>
+          <AttendancePanel />
         </TabPanel>
         
-        {/* Reports Tab */}
+        {/* Reports Tab - Also redirects to reports.jsx */}
         <TabPanel value={tabValue} index={4}>
-          <Typography variant="h6">
-            Reports & Analytics
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-            Generate analytical reports for attendance patterns.
-          </Typography>
-          
-          <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 4 }}>
-            <Typography variant="body1" color="text.secondary">
-              Reports and analytics will be displayed here.
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+            <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+              Loading reports...
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              This feature is coming soon.
-            </Typography>
-          </Paper>
+          </Box>
         </TabPanel>
         
         {/* Footer */}
